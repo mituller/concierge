@@ -1,9 +1,11 @@
 import { useState } from "react";
-import { ChevronDown, Loader2, Sparkles } from "lucide-react";
+import { ChevronDown, Loader2, Sparkles, X } from "lucide-react";
 import { Category, Email } from "../../types";
 import { useCategoriesStore } from "../../stores/categories";
 import { useSettingsStore } from "../../stores/settings";
+import { useInboxStore } from "../../stores/inbox";
 import { fetchEmailBody, summarizeEmail } from "../../services/classify";
+import { removeEmailCategory } from "../../services/db";
 
 function fmtDate(iso?: string): string {
   if (!iso) return "";
@@ -18,6 +20,7 @@ function fmtDate(iso?: string): string {
 
 export function EmailRow({ email }: { email: Email }) {
   const [open, setOpen] = useState(false);
+  const [categoryIds, setCategoryIds] = useState<string[]>(email.categoryIds);
   const [body, setBody] = useState<string | undefined>(email.bodyText);
   const [summary, setSummary] = useState<string | undefined>(email.summary);
   const [loadingBody, setLoadingBody] = useState(false);
@@ -27,9 +30,22 @@ export function EmailRow({ email }: { email: Email }) {
   const categories = useCategoriesStore((s) => s.categories);
   const settings = useSettingsStore((s) => s.settings);
 
-  const chips = email.categoryIds
+  const chips = categoryIds
     .map((id) => categories.find((c) => c.id === id))
     .filter((c): c is Category => !!c);
+
+  async function handleRemove(categoryId: string) {
+    const prev = categoryIds;
+    setCategoryIds(prev.filter((id) => id !== categoryId));
+    try {
+      await removeEmailCategory(email.id, categoryId);
+      // Refresh counts so the dashboard cards — and any open category view — update.
+      void useInboxStore.getState().refresh();
+    } catch (e) {
+      setCategoryIds(prev);
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
 
   async function loadBody() {
     setLoadingBody(true);
@@ -59,39 +75,55 @@ export function EmailRow({ email }: { email: Email }) {
 
   return (
     <div className="border-b border-gray-100 dark:border-gray-700/60">
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
-      >
-        <ChevronDown
-          size={16}
-          className={`shrink-0 text-gray-400 transition-transform ${open ? "rotate-180" : ""}`}
-        />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-sm font-medium text-gray-800 dark:text-gray-100 truncate">
-              {email.fromName || email.fromEmail || "(unknown sender)"}
-            </span>
-            <span className="text-xs text-gray-400 shrink-0">{fmtDate(email.date)}</span>
+      <div className="flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+        <button
+          onClick={() => setOpen((o) => !o)}
+          className="flex items-start gap-3 min-w-0 flex-1 text-left"
+        >
+          <ChevronDown
+            size={16}
+            className={`shrink-0 mt-0.5 text-gray-400 transition-transform ${open ? "rotate-180" : ""}`}
+          />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm font-medium text-gray-800 dark:text-gray-100 truncate">
+                {email.fromName || email.fromEmail || "(unknown sender)"}
+              </span>
+              <span className="text-xs text-gray-400 shrink-0">{fmtDate(email.date)}</span>
+            </div>
+            <p className="text-sm text-gray-600 dark:text-gray-300 truncate">{email.subject}</p>
+            {email.snippet && (
+              <p className="text-xs text-gray-400 dark:text-gray-500 truncate mt-0.5">
+                {email.snippet}
+              </p>
+            )}
           </div>
-          <p className="text-sm text-gray-600 dark:text-gray-300 truncate">{email.subject}</p>
-          {email.snippet && (
-            <p className="text-xs text-gray-400 dark:text-gray-500 truncate mt-0.5">{email.snippet}</p>
-          )}
-        </div>
-        <div className="flex flex-wrap gap-1 justify-end max-w-[40%] shrink-0">
-          {chips.map((c) => (
-            <span
-              key={c.id}
-              className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full"
-              style={{ backgroundColor: c.color + "22", color: c.color }}
-            >
-              <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: c.color }} />
-              {c.name}
-            </span>
-          ))}
-        </div>
-      </button>
+        </button>
+
+        {chips.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 justify-end shrink-0 max-w-[45%] pt-0.5">
+            {chips.map((c) => (
+              <span
+                key={c.id}
+                className="inline-flex items-center gap-1.5 rounded-full pl-2.5 pr-1 py-1 text-xs font-medium"
+                style={{ backgroundColor: c.color + "22", color: c.color }}
+              >
+                <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: c.color }} />
+                {c.name}
+                <button
+                  type="button"
+                  onClick={() => void handleRemove(c.id)}
+                  title={`Remove from ${c.name}`}
+                  aria-label={`Remove from ${c.name}`}
+                  className="inline-flex items-center justify-center h-4 w-4 rounded-full hover:bg-black/10 dark:hover:bg-white/15"
+                >
+                  <X size={13} />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
 
       {open && (
         <div className="px-12 pb-4 space-y-3">

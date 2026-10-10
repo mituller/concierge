@@ -371,6 +371,14 @@ export async function assignEmailCategories(
   }
 }
 
+export async function removeEmailCategory(emailId: string, categoryId: string): Promise<void> {
+  const d = await getDb();
+  await d.execute("DELETE FROM email_categories WHERE email_id = $1 AND category_id = $2", [
+    emailId,
+    categoryId,
+  ]);
+}
+
 export async function persistClassificationBatch(
   allIds: string[],
   entries: {
