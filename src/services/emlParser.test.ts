@@ -49,6 +49,13 @@ describe("parseEml", () => {
     expect(parseEml(eml).body).toBe("Café = 12");
   });
 
+  it("decodes quoted-printable UTF-8 punctuation (curly quote, nbsp)", () => {
+    const eml =
+      HEADERS(`Content-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: quoted-printable\r\n`) +
+      `\r\nIt=E2=80=99s time=C2=A0to go\r\n`;
+    expect(parseEml(eml).body).toBe("It\u2019s time\u00a0to go");
+  });
+
   it("decodes base64 body", () => {
     const b64 = btoa("Base64 body here");
     const eml =
