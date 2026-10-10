@@ -42,6 +42,11 @@ export interface ImapRaw {
   raw: string;
 }
 
+export interface ImapMetaBatch {
+  total: number;
+  messages: ImapMeta[];
+}
+
 export async function imapTest(cfg: ImapConfig): Promise<string> {
   return invoke<string>("imap_test", { ...cfg });
 }
@@ -50,8 +55,8 @@ export async function imapFetchMeta(
   cfg: ImapConfig,
   lastUid: number,
   limit: number
-): Promise<ImapMeta[]> {
-  return invoke<ImapMeta[]>("imap_fetch_meta", { ...cfg, lastUid, limit });
+): Promise<ImapMetaBatch> {
+  return invoke<ImapMetaBatch>("imap_fetch_meta", { ...cfg, lastUid, limit });
 }
 
 export async function imapFetchBodies(cfg: ImapConfig, uids: number[]): Promise<ImapRaw[]> {

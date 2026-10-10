@@ -102,9 +102,9 @@ export function Settings() {
       {/* Mailbox (IMAP) */}
       <Section title="Gmail (IMAP)">
         <p className="text-xs text-gray-500 dark:text-gray-400 -mt-2">
-          Read-only IMAP access — Concierge never flags, moves, or deletes mail. For Gmail, turn on
-          IMAP and use an <strong>App Password</strong> (Google Account → Security → 2-Step
-          Verification → App passwords).
+          Read-only IMAP access — Concierge never flags, moves, or deletes mail. Sign in with an
+          <strong>App Password</strong> at <code>myaccount.google.com/apppasswords</code> — requires
+          2-Step Verification to be on.
         </p>
 
         <Field label="Email" hint="The Gmail address to sign in as.">
@@ -119,7 +119,7 @@ export function Settings() {
 
         <Field
           label="App password"
-          hint="Your Gmail App Password, not your normal Google password."
+          hint="16-character code from myaccount.google.com/apppasswords — not your normal Google password."
         >
           <input
             type="password"

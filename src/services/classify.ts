@@ -15,6 +15,7 @@ import {
   getUncategorizedEmails,
   listCategories,
   markEmailClassified,
+  countEmails,
   countUncategorized,
   saveSyncState,
   setEmailBody,
@@ -41,7 +42,11 @@ const META_BATCH = 300;
 /** Full/incremental mailbox sync over IMAP. Metadata only — bodies are fetched
  *  lazily during classification/summarization. Read-only: the Rust backend uses
  *  EXAMINE + BODY.PEEK, so nothing is ever flagged or deleted. */
-export async function syncMailbox(settings: AppSettings, onProgress?: ProgressFn): Promise<number> {
+export async function syncMailbox(
+  settings: AppSettings,
+  onProgress?: ProgressFn,
+  shouldCancel?: () => boolean
+): Promise<number> {
   if (!hasImapConfig(settings)) {
     throw new Error("Set your IMAP settings first (Settings → Gmail).");
   }
@@ -51,26 +56,33 @@ export async function syncMailbox(settings: AppSettings, onProgress?: ProgressFn
   const state = await getSyncState(accountId);
   let lastUid = state?.nextPageToken ? Number(state.nextPageToken) : 0;
   let added = 0;
+  let mailboxTotal = 0;
 
   while (true) {
-    const batch = await imapFetchMeta(cfg, lastUid, META_BATCH);
-    if (batch.length === 0) break;
+    if (shouldCancel?.()) break;
 
-    for (const meta of batch) {
+    const { total, messages } = await imapFetchMeta(cfg, lastUid, META_BATCH);
+    if (total > 0) mailboxTotal = total;
+    if (messages.length === 0) break;
+
+    for (const meta of messages) {
       if (meta.uid > lastUid) lastUid = meta.uid;
       if (await emailExists(String(meta.uid))) continue;
       await upsertEmail(metaToEmail(cfg, meta));
       added++;
     }
 
+    const synced = await countEmails();
     onProgress?.({
-      label: `Syncing ${cfg.email}…`,
-      done: added,
-      total: added + META_BATCH,
+      label: `Syncing ${cfg.email}… ${synced.toLocaleString()} / ${(
+        mailboxTotal || synced
+      ).toLocaleString()}`,
+      done: synced,
+      total: mailboxTotal || synced,
     });
     await saveSyncState(accountId, { nextPageToken: String(lastUid) });
 
-    if (batch.length < META_BATCH) break;
+    if (messages.length < META_BATCH) break;
   }
 
   await saveSyncState(accountId, {
@@ -203,8 +215,9 @@ async function classifyEmail(
 export async function classifyUncategorized(params: {
   settings: AppSettings;
   onProgress?: ProgressFn;
+  shouldCancel?: () => boolean;
 }): Promise<number> {
-  const { settings, onProgress } = params;
+  const { settings, onProgress, shouldCancel } = params;
   if (!settings.openRouterApiKey) {
     throw new Error("Set an OpenRouter API key in Settings first.");
   }
@@ -222,6 +235,7 @@ export async function classifyUncategorized(params: {
   let done = 0;
 
   while (true) {
+    if (shouldCancel?.()) break;
     const batch = await getUncategorizedEmails(50);
     if (batch.length === 0) break;
 
@@ -238,6 +252,9 @@ export async function classifyUncategorized(params: {
           }
           await assignEmailCategories(email.id, assignments);
         }
+      } catch (err) {
+        // Skip a problematic message instead of aborting the whole pass.
+        console.warn(`classification skipped ${email.id}:`, err);
       } finally {
         await markEmailClassified(email.id);
       }
@@ -245,9 +262,13 @@ export async function classifyUncategorized(params: {
 
     done += batch.length;
     onProgress?.({
-      label: `Classifying with ${engineLabel}…`,
+      label: `Classifying with ${engineLabel}… ${done.toLocaleString()} / ${Math.max(
+        total,
+        done,
+        1
+      ).toLocaleString()}`,
       done,
-      total: Math.max(total, done),
+      total: Math.max(total, done, 1),
     });
   }
 

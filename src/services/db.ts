@@ -429,6 +429,12 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   };
 }
 
+export async function countEmails(): Promise<number> {
+  const d = await getDb();
+  const rows = await d.select<{ n: number }[]>("SELECT COUNT(*) AS n FROM emails");
+  return Number(rows[0]?.n ?? 0);
+}
+
 export async function countByCategory(): Promise<{ categoryId: string; count: number }[]> {
   const d = await getDb();
   const rows = await d.select<Record<string, unknown>[]>(

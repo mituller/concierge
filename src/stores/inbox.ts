@@ -19,9 +19,11 @@ interface InboxStore {
   progress: SyncProgress | null;
   lastError: string | null;
   loaded: boolean;
+  cancelRequested: boolean;
   load: () => Promise<void>;
   refresh: () => Promise<void>;
   syncNow: () => Promise<void>;
+  cancel: () => void;
 }
 
 export const useInboxStore = create<InboxStore>((set, get) => ({
@@ -32,6 +34,7 @@ export const useInboxStore = create<InboxStore>((set, get) => ({
   progress: null,
   lastError: null,
   loaded: false,
+  cancelRequested: false,
 
   load: async () => {
     await get().refresh();
@@ -54,6 +57,8 @@ export const useInboxStore = create<InboxStore>((set, get) => ({
     });
   },
 
+  cancel: () => set({ cancelRequested: true }),
+
   syncNow: async () => {
     if (get().syncing) return;
     const settings = useSettingsStore.getState().settings;
@@ -62,24 +67,44 @@ export const useInboxStore = create<InboxStore>((set, get) => ({
       return;
     }
 
-    set({ syncing: true, lastError: null, progress: { label: "Starting…", done: 0, total: 0 } });
+    set({
+      syncing: true,
+      cancelRequested: false,
+      lastError: null,
+      progress: { label: "Starting…", done: 0, total: 0 },
+    });
+    const shouldCancel = () => get().cancelRequested;
+
     try {
-      await syncMailbox(settings, (p) => set({ progress: p }));
+      await syncMailbox(
+        settings,
+        (p) => set((s) => ({ progress: p, stats: { ...s.stats, total: p.done } })),
+        shouldCancel
+      );
+      if (shouldCancel()) return;
 
       set({ progress: { label: "Building person categories…", done: 0, total: 0 } });
       await autoCreatePeople(settings);
+      if (shouldCancel()) return;
 
+      const baseCategorized = get().stats.categorized;
       await classifyUncategorized({
         settings,
-        onProgress: (p) => set({ progress: p }),
+        onProgress: (p) =>
+          set((s) => ({
+            progress: p,
+            stats: { ...s.stats, categorized: baseCategorized + p.done },
+          })),
+        shouldCancel,
       });
-
-      await useCategoriesStore.getState().load();
-      await get().refresh();
     } catch (e) {
       set({ lastError: e instanceof Error ? e.message : String(e) });
     } finally {
-      set({ syncing: false, progress: null });
+      set({ syncing: false, progress: null, cancelRequested: false });
+      // Always refresh so the dashboard reflects whatever made it to disk
+      // (including a partial sync/classification after a cancel).
+      void useCategoriesStore.getState().load();
+      void get().refresh();
     }
   },
 }));

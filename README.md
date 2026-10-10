@@ -81,14 +81,15 @@ Everything is configured in **Settings** — nothing is hardcoded.
 
 ### Gmail (`Settings → Gmail (IMAP)`)
 
-1. In Gmail, enable IMAP: **Gmail → Settings → See all settings → Forwarding and
-   POP/IMAP → Enable IMAP**.
-2. Create an **App Password** (requires 2-Step Verification):
-   **Google Account → Security → 2-Step Verification → App passwords**, select
-   *Mail* and *Other*, then copy the 16-character password.
+1. IMAP is always on for personal Gmail accounts (as of January 2025), so there's
+   nothing to enable.
+2. Create an **App Password** (requires **2-Step Verification** to be on first):
+   **Google Account → Security → 2-Step Verification** (enable it), then go to
+   **myaccount.google.com/apppasswords**, name it `Concierge`, and copy the
+   16-character password.
 3. In Concierge, fill in:
    - **Email** — your Gmail address
-   - **App password** — the 16-character app password (not your normal password)
+   - **App password** — the 16-character code (not your normal password)
    - **IMAP server** — `imap.gmail.com`, **Port** — `993`, **Folder** — `INBOX`
 4. Click **Test connection**, then **Sync now**.
 

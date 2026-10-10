@@ -1,4 +1,4 @@
-import { LayoutDashboard, Inbox as InboxIcon, Settings, RefreshCw } from "lucide-react";
+import { LayoutDashboard, Inbox as InboxIcon, Settings, RefreshCw, X } from "lucide-react";
 import { useInboxStore } from "../../stores/inbox";
 
 export type View = "dashboard" | "inbox" | "settings";
@@ -12,6 +12,7 @@ export function Sidebar({ current, onChange }: SidebarProps) {
   const syncing = useInboxStore((s) => s.syncing);
   const progress = useInboxStore((s) => s.progress);
   const syncNow = useInboxStore((s) => s.syncNow);
+  const cancel = useInboxStore((s) => s.cancel);
 
   const nav: { id: View; icon: React.ReactNode; label: string }[] = [
     { id: "dashboard", icon: <LayoutDashboard size={18} />, label: "Dashboard" },
@@ -62,14 +63,21 @@ export function Sidebar({ current, onChange }: SidebarProps) {
             </div>
           </div>
         )}
-        <button
-          onClick={() => void syncNow()}
-          disabled={syncing}
-          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-sky-500 hover:bg-sky-400 disabled:opacity-50 text-white transition-colors"
-        >
-          <RefreshCw size={15} className={syncing ? "animate-spin" : ""} />
-          {syncing ? "Syncing…" : "Sync now"}
-        </button>
+        {syncing ? (
+          <button
+            onClick={cancel}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-red-500 hover:bg-red-400 text-white transition-colors"
+          >
+            <X size={15} /> Cancel
+          </button>
+        ) : (
+          <button
+            onClick={() => void syncNow()}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-sky-500 hover:bg-sky-400 text-white transition-colors"
+          >
+            <RefreshCw size={15} /> Sync now
+          </button>
+        )}
       </div>
     </aside>
   );

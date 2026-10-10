@@ -53,6 +53,12 @@ struct ImapRaw {
     raw: String,
 }
 
+#[derive(serde::Serialize)]
+struct ImapMetaBatch {
+    total: u32,
+    messages: Vec<ImapMeta>,
+}
+
 fn imap_test_impl(host: &str, port: u16, email: &str, password: &str, folder: &str) -> Result<String, String> {
     let mut session = imap_session(host, port, email, password)?;
     let count = examine(&mut session, folder)?;
@@ -68,21 +74,27 @@ fn imap_fetch_meta_impl(
     folder: &str,
     last_uid: u32,
     limit: u32,
-) -> Result<Vec<ImapMeta>, String> {
+) -> Result<ImapMetaBatch, String> {
     let mut session = imap_session(host, port, email, password)?;
-    examine(&mut session, folder)?;
+    let total = examine(&mut session, folder)?;
 
-    let uids = session
-        .uid_search(format!("UID {}:*", last_uid + 1))
-        .map_err(|e| e.to_string())?;
-    let batch: Vec<u32> = uids.into_iter().take(limit as usize).collect();
+    // SEARCH ALL returns every UID, but as an *unordered* HashSet — sort it
+    // ascending so batches page through the mailbox in stable UID order.
+    let uids = session.uid_search("ALL").map_err(|e| e.to_string())?;
+    let mut all: Vec<u32> = uids.into_iter().collect();
+    all.sort_unstable();
+    let batch: Vec<u32> = all
+        .into_iter()
+        .filter(|u| *u > last_uid)
+        .take(limit as usize)
+        .collect();
     if batch.is_empty() {
         let _ = session.logout();
-        return Ok(Vec::new());
+        return Ok(ImapMetaBatch { total, messages: Vec::new() });
     }
 
     let fetches = session
-        .uid_fetch(seq_set(&batch), "UID FLAGS BODY.PEEK[HEADER]")
+        .uid_fetch(seq_set(&batch), "(UID FLAGS BODY.PEEK[HEADER])")
         .map_err(|e| e.to_string())?;
 
     let mut out = Vec::with_capacity(batch.len());
@@ -97,7 +109,7 @@ fn imap_fetch_meta_impl(
         }
     }
     let _ = session.logout();
-    Ok(out)
+    Ok(ImapMetaBatch { total, messages: out })
 }
 
 fn imap_fetch_bodies_impl(
@@ -115,7 +127,7 @@ fn imap_fetch_bodies_impl(
     examine(&mut session, folder)?;
 
     let fetches = session
-        .uid_fetch(seq_set(&uids), "BODY.PEEK[]")
+        .uid_fetch(seq_set(&uids), "(BODY.PEEK[])")
         .map_err(|e| e.to_string())?;
 
     let mut out = Vec::with_capacity(uids.len());
@@ -147,7 +159,7 @@ async fn imap_fetch_meta(
     folder: String,
     last_uid: u32,
     limit: u32,
-) -> Result<Vec<ImapMeta>, String> {
+) -> Result<ImapMetaBatch, String> {
     tauri::async_runtime::spawn_blocking(move || {
         imap_fetch_meta_impl(&host, port, &email, &password, &folder, last_uid, limit)
     })
