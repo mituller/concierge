@@ -371,6 +371,59 @@ export async function assignEmailCategories(
   }
 }
 
+export async function persistClassificationBatch(
+  allIds: string[],
+  entries: {
+    emailId: string;
+    assignments: { categoryId: string; confidence: number }[];
+    mentions: { name: string; email?: string; confidence: number }[];
+  }[]
+): Promise<void> {
+  if (allIds.length === 0) return;
+  const d = await getDb();
+  const ph = allIds.map((_, i) => `$${i + 1}`).join(",");
+
+  await d.execute(`DELETE FROM email_categories WHERE email_id IN (${ph})`, allIds);
+  await d.execute(`DELETE FROM person_mentions WHERE email_id IN (${ph})`, allIds);
+
+  // Assignments — one multi-row INSERT instead of N per-email round-trips.
+  const aVals: unknown[] = [];
+  const aRows: string[] = [];
+  for (const e of entries) {
+    for (const a of e.assignments) {
+      aRows.push(`($${aVals.length + 1},$${aVals.length + 2},$${aVals.length + 3})`);
+      aVals.push(e.emailId, a.categoryId, a.confidence);
+    }
+  }
+  if (aRows.length > 0) {
+    await d.execute(
+      `INSERT INTO email_categories (email_id, category_id, confidence) VALUES ${aRows.join(",")}`,
+      aVals
+    );
+  }
+
+  // Person mentions.
+  const mVals: unknown[] = [];
+  const mRows: string[] = [];
+  for (const e of entries) {
+    for (const m of e.mentions) {
+      mRows.push(
+        `($${mVals.length + 1},$${mVals.length + 2},$${mVals.length + 3},$${mVals.length + 4})`
+      );
+      mVals.push(e.emailId, m.email ? m.email.toLowerCase() : null, m.name, m.confidence);
+    }
+  }
+  if (mRows.length > 0) {
+    await d.execute(
+      `INSERT INTO person_mentions (email_id, person_email, person_name, confidence) VALUES ${mRows.join(",")}`,
+      mVals
+    );
+  }
+
+  // Mark the whole batch classified (including any that errored, so they don't loop).
+  await d.execute(`UPDATE emails SET classified = 1 WHERE id IN (${ph})`, allIds);
+}
+
 export async function assignCategoryToSender(
   fromEmail: string,
   categoryId: string
@@ -384,28 +437,76 @@ export async function assignCategoryToSender(
   );
 }
 
-export interface SenderFrequency {
-  fromEmail: string;
-  fromName: string;
+// ─── Person mentions (who an email is about — AI-extracted) ────────────────
+
+export interface PersonMention {
+  email?: string;
+  name: string;
+  confidence: number;
+}
+
+/** Replace the AI-extracted people mentions for one email. */
+export async function storePersonMentions(
+  emailId: string,
+  mentions: PersonMention[]
+): Promise<void> {
+  const d = await getDb();
+  await d.execute("DELETE FROM person_mentions WHERE email_id = $1", [emailId]);
+  for (const m of mentions) {
+    await d.execute(
+      `INSERT INTO person_mentions (email_id, person_email, person_name, confidence)
+       VALUES ($1, $2, $3, $4)`,
+      [emailId, m.email ? m.email.toLowerCase() : null, m.name, m.confidence]
+    );
+  }
+}
+
+export interface PersonMentionCount {
+  key: string;
+  email?: string;
+  name: string;
   count: number;
 }
 
-export async function getSenderFrequencies(minCount: number): Promise<SenderFrequency[]> {
+/** Top people ranked by how many distinct emails mention them. */
+export async function getPersonMentionCounts(limit = 30): Promise<PersonMentionCount[]> {
   const d = await getDb();
   const rows = await d.select<Record<string, unknown>[]>(
-    `SELECT from_email, COALESCE(MAX(from_name), '') AS from_name, COUNT(*) AS n
-     FROM emails
-     WHERE from_email IS NOT NULL AND from_email != ''
-     GROUP BY lower(from_email)
-     HAVING COUNT(*) >= $1
-     ORDER BY n DESC`,
-    [minCount]
+    `SELECT
+       COALESCE(lower(person_email), lower(person_name)) AS key,
+       COALESCE(MAX(person_email), '') AS person_email,
+       MAX(person_name) AS person_name,
+       COUNT(DISTINCT email_id) AS n
+     FROM person_mentions
+     GROUP BY key
+     ORDER BY n DESC
+     LIMIT $1`,
+    [limit]
   );
   return rows.map((r) => ({
-    fromEmail: r.from_email as string,
-    fromName: (r.from_name as string) || (r.from_email as string),
+    key: r.key as string,
+    email: (r.person_email as string) || undefined,
+    name: r.person_name as string,
     count: Number(r.n),
   }));
+}
+
+/** Assign every email whose mentions match this person category (by email or
+ *  exact name) to it. Backfills previously-classified emails. */
+export async function backfillPersonCategory(cat: Category): Promise<void> {
+  const d = await getDb();
+  await d.execute(
+    `INSERT OR IGNORE INTO email_categories (email_id, category_id, confidence)
+     SELECT DISTINCT pm.email_id, $1, $2 FROM person_mentions pm
+     WHERE lower(pm.person_email) = lower($3)`,
+    [cat.id, 1.0, cat.personEmail ?? null]
+  );
+  await d.execute(
+    `INSERT OR IGNORE INTO email_categories (email_id, category_id, confidence)
+     SELECT DISTINCT pm.email_id, $1, $2 FROM person_mentions pm
+     WHERE lower(pm.person_name) = lower($3)`,
+    [cat.id, 1.0, cat.name]
+  );
 }
 
 // ─── Stats ──────────────────────────────────────────────────────────────────

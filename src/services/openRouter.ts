@@ -11,9 +11,9 @@ import { load } from "@tauri-apps/plugin-store";
  */
 
 export interface OpenRouterModel {
-  /** Slug used in API calls, e.g. "~deepseek/deepseek-pro-latest" */
+  /** Slug used in API calls, e.g. "deepseek/deepseek-v4.1-flash" */
   id: string;
-  /** Human name, e.g. "DeepSeek: DeepSeek Pro Latest" */
+  /** Human name, e.g. "DeepSeek: DeepSeek Flash Latest" */
   name: string;
   /** USD per 1M input tokens */
   priceIn: number;
@@ -22,12 +22,14 @@ export interface OpenRouterModel {
   contextLength: number;
 }
 
-/** Curated "Recommended" list, ordered. DeepSeek Pro first — it's Concierge's
- *  default engine for classification + summaries. */
+/** Curated "Recommended" list, ordered. DeepSeek V4.1 Flash first — pinned
+ *  explicitly so you always know which version runs (the `~…-latest` alias
+ *  silently follows new releases). */
 export const RECOMMENDED_MODEL_IDS = [
+  "deepseek/deepseek-v4.1-flash",
+  "~deepseek/deepseek-flash-latest",
   "~deepseek/deepseek-pro-latest",
   "~anthropic/claude-sonnet-latest",
-  "~deepseek/deepseek-flash-latest",
   "~openai/gpt-luna-latest",
   "~google/gemini-flash-latest",
   "~anthropic/claude-haiku-latest",
@@ -154,7 +156,7 @@ export function formatModelPrice(m: OpenRouterModel): string {
   return `${inS || "?"} in · ${outS || "?"} out /1M`;
 }
 
-// ─── Chat completions (DeepSeek Pro via OpenRouter) ─────────────────────────
+// ─── Chat completions (DeepSeek via OpenRouter) ─────────────────────────
 
 export interface ChatMessage {
   role: "system" | "user" | "assistant";

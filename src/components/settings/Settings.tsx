@@ -46,12 +46,15 @@ const THEMES: { id: Theme; label: string }[] = [
 
 export function Settings() {
   const { settings, update } = useSettingsStore();
-  const { categories, addTopic, rename, recolor, remove: removeCategory } = useCategoriesStore();
+  const { categories, addTopic, addPerson, rename, recolor, remove: removeCategory } =
+    useCategoriesStore();
 
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
   const [newCategory, setNewCategory] = useState("");
   const [newColor, setNewColor] = useState("#0ea5e9");
+  const [newPersonName, setNewPersonName] = useState("");
+  const [newPersonEmail, setNewPersonEmail] = useState("");
 
   const topicCategories = categories.filter((c) => c.kind === "topic");
   const personCategories = categories.filter((c) => c.kind === "person");
@@ -74,6 +77,14 @@ export function Settings() {
     if (!name) return;
     await addTopic(name, newColor);
     setNewCategory("");
+  }
+
+  async function handleAddPerson() {
+    const name = newPersonName.trim();
+    if (!name) return;
+    await addPerson(name, newPersonEmail.trim());
+    setNewPersonName("");
+    setNewPersonEmail("");
   }
 
   return (
@@ -185,12 +196,12 @@ export function Settings() {
             className="w-full rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-gray-800 dark:text-gray-100 outline-none focus:border-sky-500"
           >
             <option value="jev">Jev (TypeSafe) — fast typed yes/no</option>
-            <option value="deepseek">DeepSeek Pro — chat + JSON</option>
+            <option value="deepseek">DeepSeek — chat + JSON</option>
           </select>
         </Field>
         <Field
           label="OpenRouter API key"
-          hint="Both Jev and DeepSeek Pro run through your OpenRouter account. Get a key at openrouter.ai/keys."
+          hint="Both Jev and DeepSeek run through your OpenRouter account. Get a key at openrouter.ai/keys."
         >
           <input
             type="password"
@@ -201,8 +212,8 @@ export function Settings() {
           />
         </Field>
         <Field
-          label="Model (DeepSeek Pro)"
-          hint="Used for on-demand summaries, and for classification when the engine above is DeepSeek Pro."
+          label="Model (DeepSeek)"
+          hint="Used for on-demand summaries, and for classification when the engine above is DeepSeek. Default: deepseek/deepseek-v4.1-flash."
         >
           <OpenRouterModelPicker
             value={settings.openRouterModel}
@@ -214,8 +225,9 @@ export function Settings() {
       {/* Categories */}
       <Section title="Categories">
         <p className="text-xs text-gray-500 dark:text-gray-400 -mt-2">
-          Topic categories are used by the classifier to sort every message. Person categories are
-          created automatically for frequent senders.
+          Topic categories sort every message (an email can be in several). Person categories are
+          who an email is <strong>about</strong>: the top 10 are auto-discovered from your mail,
+          and you can add more by hand.
         </p>
 
         <div className="space-y-1.5">
@@ -256,10 +268,40 @@ export function Settings() {
           </button>
         </div>
 
+        <div className="flex items-center gap-2 pt-1">
+          <input
+            type="text"
+            value={newPersonName}
+            onChange={(e) => setNewPersonName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void handleAddPerson();
+            }}
+            placeholder="Person name…"
+            className="flex-1 min-w-0 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-gray-800 dark:text-gray-100 outline-none focus:border-sky-500"
+          />
+          <input
+            type="text"
+            value={newPersonEmail}
+            onChange={(e) => setNewPersonEmail(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void handleAddPerson();
+            }}
+            placeholder="email (optional)"
+            className="w-44 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-gray-800 dark:text-gray-100 outline-none focus:border-sky-500"
+          />
+          <button
+            onClick={() => void handleAddPerson()}
+            disabled={!newPersonName.trim()}
+            className="inline-flex items-center gap-1 px-3 py-2 rounded-md text-sm font-medium border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50"
+          >
+            <Plus size={14} /> Add person
+          </button>
+        </div>
+
         {personCategories.length > 0 && (
           <div className="space-y-1.5 pt-2">
             <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400">
-              People (auto)
+              People
             </p>
             {personCategories.map((c) => (
               <div

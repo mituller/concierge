@@ -26,6 +26,9 @@ jobs:
       - name: Type-check + bundle frontend
         run: pnpm build
 
+      - name: Run frontend tests
+        run: pnpm test
+
       - uses: dtolnay/rust-toolchain@stable
 
       - uses: Swatinem/rust-cache@v2
@@ -34,3 +37,6 @@ jobs:
 
       - name: Check Rust backend
         run: cargo check --manifest-path src-tauri/Cargo.toml
+
+      - name: Run Rust tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml

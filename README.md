@@ -1,8 +1,8 @@
 # Concierge
 
 **The mail concierge for a crowded inbox.** A native macOS desktop app that syncs
-your Gmail over IMAP, classifies every message into categories with AI, and shows
-a dashboard of counts + trends so you can work through the backlog.
+your Gmail over IMAP (read-only), classifies every message into categories with AI,
+and shows a live dashboard of counts + trends so you can work through the backlog.
 
 <img src="public/icon.svg" alt="Concierge" width="128" height="128" />
 
@@ -10,20 +10,26 @@ a dashboard of counts + trends so you can work through the backlog.
 
 ## What it does
 
-- **Gmail sync (IMAP)** — connects via IMAP read-only, pulls the full mailbox
-  (metadata-first, resumable via a UID cursor), and keeps incremental refreshes.
-  Uses `EXAMINE` + `BODY.PEEK`, so nothing is ever flagged, moved, or deleted.
-- **AI classification** — every email is classified into user-defined topic
-  categories (multi-label, with confidence) by **Jev** (TypeSafe's typed
-  yes/no decision model) — or **DeepSeek Pro** if you switch the classifier.
-- **Auto people** — frequent senders become their own person-category (free, no AI).
-- **Dashboard** — category cards with counts, plus a bar chart (messages per
-  category) and a 12-month multi-line trend chart with show/hide toggles.
-- **Drill-down** — click a category card to see its messages, expand a message for
-  the full body, and generate an on-demand **DeepSeek summary** ("what this is" +
-  "why it needs follow-up").
+- **Gmail sync (IMAP, read-only)** — metadata-first sync with a resumable UID
+  cursor and incremental refreshes. Uses `EXAMINE` + `BODY.PEEK`, so nothing is
+  ever flagged, moved, or deleted.
+- **Live progress + cancel/resume** — the sidebar shows real `N / M` counts for
+  syncing *and* classifying, with a **Cancel** button. Everything resumes where it
+  left off (UID cursor + `classified` flag), even across app restarts.
+- **AI classification (multi-label)** — every email is sorted into topic
+  categories — **Jev** (fast typed yes/no, the default) or **DeepSeek Flash**
+  (chat + JSON). One email can be in several categories at once.
+- **People categories = who the email is *about*** — AI extracts the people
+  central to each email's *content* (not just the sender). The **top 10** people
+  become person-categories automatically; add more manually. Example: a doctor's
+  appointment email lands in **Health** *and* a person category for the doctor.
+- **Live dashboard** — category cards tick up as emails are categorized; a bar
+  chart + 12-month multi-line trend chart update as you watch. Category views
+  refresh themselves while open.
+- **Drill-down & summaries** — click any card to see its messages; expand one and
+  get an on-demand **DeepSeek summary** ("what this is" + "why it needs follow-up").
 
-Iteration 1 is **read-only** — no delete, no archive, no label write-back.
+v1 is **read-only** — no delete, no archive, no label write-back to Gmail.
 
 ---
 
@@ -38,7 +44,8 @@ Iteration 1 is **read-only** — no delete, no archive, no label write-back.
 | DB | SQLite via `tauri-plugin-sql` |
 | Settings | JSON store via `tauri-plugin-store` |
 | HTTP | `tauri-plugin-http` (all `https://` calls) |
-| AI | **Jev** (classification) + **DeepSeek Pro** (summaries) via OpenRouter |
+| Charts | hand-rolled SVG (bar + multi-line trend) |
+| AI | **Jev** (`~typesafe/jev-latest`) + **DeepSeek V4.1 Flash** (`deepseek/deepseek-v4.1-flash`) via OpenRouter |
 | Email | IMAP (read-only — `EXAMINE` + `BODY.PEEK`) |
 
 ---
@@ -48,20 +55,20 @@ Iteration 1 is **read-only** — no delete, no archive, no label write-back.
 ### Prerequisites
 
 - macOS (Apple Silicon or Intel)
-- Node.js v20+
+- Node.js v20+ and [pnpm](https://pnpm.io/installation)
 - Rust (`curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`)
 - An [OpenRouter](https://openrouter.ai) API key
-- Gmail with IMAP enabled + a Gmail **App Password**
+- Gmail with an **App Password** (IMAP is always on for personal accounts since Jan 2025)
 
 ### Install
 
 ```bash
-cd concierge
+cd Concierge
 pnpm install
 source ~/.cargo/env && pnpm tauri dev
 ```
 
-The first Rust compile takes a few minutes.
+The first Rust compile takes a few minutes; subsequent starts are quick.
 
 ---
 
@@ -71,64 +78,86 @@ Everything is configured in **Settings** — nothing is hardcoded.
 
 ### AI (`Settings → AI`)
 
-1. Paste your **OpenRouter API key** (Jev and DeepSeek Pro both bill to it).
+1. Paste your **OpenRouter API key** (both Jev and DeepSeek bill to it).
 2. Choose the **email classifier**:
    - **Jev (TypeSafe)** — the default. Fast, cheap, typed yes/no per category via
      OpenRouter's Decisions API. Output tokens are free.
-   - **DeepSeek Pro** — chat + JSON classification using the model below.
-3. Pick **`~deepseek/deepseek-pro-latest`** (or any model) for on-demand
-   **summaries** — Jev can't write prose, so summaries always use this model.
+   - **DeepSeek** — chat + JSON classification, using the model below.
+3. **Model (DeepSeek)** — defaults to **`deepseek/deepseek-v4.1-flash`** (pinned
+   explicitly so you know which version runs; the `~…-latest` alias follows new
+   releases automatically);
+   change it with the model picker if you like. DeepSeek is used for on-demand
+   summaries and for classification when the classifier is set to DeepSeek.
+   (People extraction always uses a fast model.)
 
 ### Gmail (`Settings → Gmail (IMAP)`)
 
-1. IMAP is always on for personal Gmail accounts (as of January 2025), so there's
-   nothing to enable.
-2. Create an **App Password** (requires **2-Step Verification** to be on first):
-   **Google Account → Security → 2-Step Verification** (enable it), then go to
-   **myaccount.google.com/apppasswords**, name it `Concierge`, and copy the
-   16-character password.
-3. In Concierge, fill in:
+1. Create an **App Password** (requires **2-Step Verification** on first):
+   **Google Account → Security → 2-Step Verification** (enable it), then
+   **myaccount.google.com/apppasswords** → name it `Concierge` → copy the
+   16-character code.
+2. In Concierge:
    - **Email** — your Gmail address
-   - **App password** — the 16-character code (not your normal password)
+   - **App password** — the 16-char code *(not your normal Google password)*
    - **IMAP server** — `imap.gmail.com`, **Port** — `993`, **Folder** — `INBOX`
-4. Click **Test connection**, then **Sync now**.
+3. Click **Test connection**, then **Sync now**.
 
-Concierge only opens the mailbox read-only (`EXAMINE`) and fetches with
-`BODY.PEEK`, so it can never flag, move, or delete your messages.
+Concierge opens the mailbox read-only (`EXAMINE`) and fetches with `BODY.PEEK`, so
+it can never flag, move, or delete your messages.
 
 ### Categories (`Settings → Categories`)
 
-- **Topic categories** are the buckets DeepSeek Pro classifies into. The defaults
-  are *Follow-up required, Potential spam, Billing, Personal, Newsletters /
-  promotions, Other* — add, rename, recolor, or delete at will.
-- **Person categories** are created automatically for senders you hear from often
-  (default threshold: 5 messages). They're deterministic sender-based — no AI.
+- **Topic categories** — multi-label buckets. Defaults: *Follow-up required,
+  Potential spam, Billing, Sales, Health, Personal, Newsletters / promotions,
+  Invoices / receipts, Other*. Add, rename, recolor, or delete any of them.
+- **Person categories** — *who an email is about*, detected from content by AI.
+  The **top 10 most-mentioned people** are auto-created (and backfilled) as
+  classification runs; add more manually (name + optional email) at any time.
+  Emails are matched to people by email, then by name.
 
 ---
 
 ## Usage
 
-- **Sync now** (sidebar button, or ⌘R) — pulls new mail, builds person categories,
-  and classifies the backlog. It batches and resumes, so you can close and re-open
-  the app mid-way. Progress shows in the sidebar.
-- **Dashboard** — stat cards + category cards + charts. Click a card to drill down.
+- **Sync now** (sidebar, or ⌘R) — syncs new mail, then classifies the backlog with
+  live `N / M` progress. **Cancel** stops at the next batch; **Sync now** resumes.
+- **Dashboard** — stat cards, category cards (updating live), bar chart, 12-month
+  trend chart. Click a card to drill down.
+- **Category view** — refreshes automatically while open; expand any message for
+  the full body or a **DeepSeek summary**.
 - **Inbox** — the full synced mailbox, newest first.
-- **Summaries** — expand any message in a list and click "Summarize with DeepSeek".
+
+---
+
+## Testing
+
+```bash
+pnpm test          # frontend unit tests (vitest)
+cd src-tauri && cargo test   # rust unit tests
+```
+
+Frontend tests live in `src/**/*.test.ts` (currently MIME parsing + classifier
+helpers). Rust tests are inline in `src-tauri/src/lib.rs`. GitHub Actions CI runs
+`pnpm build`, `pnpm test`, `cargo check`, and `cargo test` on every push.
 
 ---
 
 ## Development
 
 ```bash
-pnpm build            # type-check + bundle (no app window)
-cd src-tauri && cargo check   # rust only
-source ~/.cargo/env && pnpm tauri dev   # full dev mode
-source ~/.cargo/env && pnpm tauri build # production build
+pnpm dev                             # vite only (no app window)
+pnpm build                           # tsc type-check + bundle
+pnpm test                            # vitest unit tests
+cd src-tauri && cargo check          # rust type-check
+cd src-tauri && cargo test           # rust unit tests
+source ~/.cargo/env && pnpm tauri dev    # full dev mode (app window)
+source ~/.cargo/env && pnpm tauri build # production bundle
 ```
 
-Full restart (not just HMR) is required when `src-tauri/` changes, when a SQLite
-migration is added to `src-tauri/migrations/`, or when
-`src-tauri/capabilities/default.json` changes.
+**Full restart (not just HMR) is required when:**
+- anything in `src-tauri/` changes (Rust recompiles),
+- a SQLite migration is added in `src-tauri/migrations/`,
+- `src-tauri/capabilities/default.json` changes.
 
 ### Data locations
 
@@ -142,5 +171,6 @@ migration is added to `src-tauri/migrations/`, or when
 ## Data & privacy
 
 All mail is stored locally in SQLite. External calls are made only to services you
-explicitly configure: the Gmail API (your account) and OpenRouter (your key), for
-fully local classification/summarization. No analytics, no telemetry.
+explicitly configure: your Gmail over IMAP (read-only) and OpenRouter (your key)
+for classification/summarization. No analytics, no telemetry. Nothing on Gmail is
+ever modified, marked read, moved, or deleted.

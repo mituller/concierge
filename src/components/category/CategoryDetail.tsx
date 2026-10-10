@@ -50,6 +50,7 @@ export function CategoryDetail({
       <EmailList
         categoryId={categoryId}
         emptyText="No messages in this category yet."
+        refreshKey={counts[categoryId] ?? 0}
       />
     </div>
   );

@@ -10,13 +10,14 @@
 shows a dashboard of counts + trends to work through the backlog. v1 is
 **read-only** — nothing is ever flagged, moved, or deleted on the server.
 
-## Key decision — Jev + DeepSeek Pro (both via OpenRouter)
+## Key decision — Jev + DeepSeek (both via OpenRouter)
 
 Classification uses **Jev (TypeSafe)** — a typed yes/no decision model — through
 OpenRouter's Decisions API (`~typesafe/jev-latest`). It is fast, cheap, and output
-tokens are free. **DeepSeek Pro** (`~deepseek/deepseek-pro-latest`) handles
-on-demand summaries and is available as an alternate classifier. Both run through
-one OpenRouter API key — no separate TypeSafe account is needed.
+tokens are free. **DeepSeek V4.1 Flash** (`deepseek/deepseek-v4.1-flash`) handles
+people extraction and on-demand summaries, and is available as an alternate
+classifier. Both run through one OpenRouter API key — no separate TypeSafe
+account is needed.
 
 ## Stack
 
@@ -29,7 +30,7 @@ one OpenRouter API key — no separate TypeSafe account is needed.
 | DB | SQLite via `tauri-plugin-sql` |
 | Settings/keys | JSON store via `tauri-plugin-store` |
 | HTTP | `tauri-plugin-http` `fetch` (never `window.fetch`) |
-| AI | **DeepSeek Pro** via OpenRouter (OpenAI-compatible chat + JSON output) |
+| AI | **DeepSeek V4.1 Flash** (`deepseek/deepseek-v4.1-flash`) + Jev via OpenRouter |
 | Icons | lucide-react |
 | Email | IMAP (read-only — Rust `EXAMINE` + `BODY.PEEK`, `imap` crate + native-tls) |
 
@@ -48,8 +49,8 @@ one OpenRouter API key — no separate TypeSafe account is needed.
    assigned deterministically (no AI).
 3. **Classify** — for each uncategorized email (`classified=0`), fetch the body
    lazily and send from/subject/snippet/body to the classifier. **Jev** answers one
-   typed yes/no question per topic category; **DeepSeek Pro** returns JSON
-   multi-label tags. Confidence is stored; `classified=1` prevents empty-result loops.
+   typed yes/no question per topic category; **DeepSeek** returns JSON
+   multi-label tags + people. Confidence is stored; `classified=1` prevents empty-result loops.
 4. **Summarize** — on-demand per expanded message; cached in `emails.summary`.
 5. **Dashboard** — stat cards, category cards, bar chart (per-category counts),
    12-month multi-line trend with show/hide toggles.
@@ -73,8 +74,8 @@ one OpenRouter API key — no separate TypeSafe account is needed.
 - [x] Settings: IMAP (host/port/email/app-password/folder + test), OpenRouter key + model picker, category management
 - [x] DB migrations (emails, categories, email_categories, sync_state)
 - [x] Read-only IMAP sync (EXAMINE + BODY.PEEK, UID cursor + resume)
-- [x] Jev classifier (typed yes/no per category, confidence, resume) + DeepSeek Pro alternate
-- [x] DeepSeek Pro summaries (on-demand, cached)
+- [x] Jev classifier (typed yes/no per category, confidence, resume) + DeepSeek alternate
+- [x] DeepSeek summaries (on-demand, cached)
 - [x] Auto person-categories (sender frequency)
 - [x] Dashboard: stat cards + category cards + bar/line charts
 - [x] Category drill-down + Inbox list (paginated)

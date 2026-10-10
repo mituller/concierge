@@ -7,7 +7,7 @@ import {
   getTrendByMonth,
   listCategories,
 } from "../services/db";
-import { autoCreatePeople, classifyUncategorized, syncMailbox } from "../services/classify";
+import { classifyUncategorized, syncMailbox } from "../services/classify";
 import { useSettingsStore } from "./settings";
 import { useCategoriesStore } from "./categories";
 
@@ -83,18 +83,14 @@ export const useInboxStore = create<InboxStore>((set, get) => ({
       );
       if (shouldCancel()) return;
 
-      set({ progress: { label: "Building person categories…", done: 0, total: 0 } });
-      await autoCreatePeople(settings);
-      if (shouldCancel()) return;
-
-      const baseCategorized = get().stats.categorized;
       await classifyUncategorized({
         settings,
-        onProgress: (p) =>
-          set((s) => ({
-            progress: p,
-            stats: { ...s.stats, categorized: baseCategorized + p.done },
-          })),
+        onProgress: (p) => {
+          set({ progress: p });
+          // Refresh counts + stats live so the dashboard cards (and any open
+          // category view via refreshKey) update as emails get categorized.
+          void get().refresh();
+        },
         shouldCancel,
       });
     } catch (e) {

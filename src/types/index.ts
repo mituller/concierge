@@ -3,7 +3,7 @@
 export type Theme = "light" | "dark" | "automatic";
 export type CategoryKind = "topic" | "person";
 
-/** Which engine classifies emails: Jev (typed yes/no, cheap) or DeepSeek Pro (chat + JSON). */
+/** Which engine classifies emails: Jev (typed yes/no, cheap) or DeepSeek (chat + JSON). */
 export type ClassifierEngine = "jev" | "deepseek";
 
 export interface EmailAccount {
@@ -59,10 +59,10 @@ export interface AppSettings {
   imapEmail: string;
   imapPassword: string;
   imapFolder: string;
-  // Classification engine: Jev (Decisions API) or DeepSeek Pro (chat + JSON).
+  // Classification engine: Jev (Decisions API) or DeepSeek (chat + JSON).
   // Summaries always use the OpenRouter chat model below.
   classifier: ClassifierEngine;
-  // DeepSeek Pro via OpenRouter (summaries + deepseek classifier)
+  // DeepSeek via OpenRouter (summaries + deepseek classifier)
   openRouterApiKey: string;
   openRouterModel: string;
   // A sender becomes an auto person-category once seen this many times
@@ -79,7 +79,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   imapFolder: "INBOX",
   classifier: "jev",
   openRouterApiKey: "",
-  openRouterModel: "~deepseek/deepseek-pro-latest",
+  openRouterModel: "deepseek/deepseek-v4.1-flash",
   personThreshold: 5,
 };
 
@@ -87,10 +87,17 @@ export const DEFAULT_TOPIC_CATEGORIES: TopicCategorySeed[] = [
   { name: "Follow-up required", color: "#f59e0b" },
   { name: "Potential spam", color: "#ef4444" },
   { name: "Billing", color: "#3b82f6" },
+  { name: "Sales", color: "#f97316" },
+  { name: "Health", color: "#14b8a6" },
   { name: "Personal", color: "#ec4899" },
   { name: "Newsletters / promotions", color: "#a855f7" },
+  { name: "Invoices / receipts", color: "#10b981" },
   { name: "Other", color: "#6b7280" },
 ];
+
+/** Max auto-created person categories (the top-N by how often they're the
+ *  *subject* of your mail). Add more people manually in Settings. */
+export const MAX_AUTO_PEOPLE = 10;
 
 export const PERSON_CATEGORY_COLORS = [
   "#0ea5e9",

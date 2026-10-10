@@ -1,7 +1,7 @@
 # Concierge — agent guide
 
 Native macOS Tauri v2 app that syncs Gmail over **IMAP (read-only)** and classifies
-mail with AI (Jev or DeepSeek Pro via OpenRouter). No Gmail API / OAuth. Nothing is
+mail with AI (Jev or DeepSeek via OpenRouter). No Gmail API / OAuth. Nothing is
 ever deleted, flagged, or moved on the server.
 
 ## Stack
@@ -41,6 +41,10 @@ ever deleted, flagged, or moved on the server.
   classification/summarization (`imap_fetch_bodies`).
 - `emails.classified` (0/1) marks whether classification has run, so a
   zero-category result doesn't loop forever.
+- Person categories = who an email is *about* (AI entity extraction into
+  `person_mentions`). `bootstrapPeople()` creates the top `MAX_AUTO_PEOPLE` (10)
+  person categories from mentions and backfills. `assignCategoryToSender`/
+  `getSenderFrequencies` (sender-based people) are dead code — don't use them.
 - `sync_state.next_page_token` stores the highest-synced IMAP UID (resume cursor).
 
 ## Build

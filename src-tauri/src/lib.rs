@@ -186,12 +186,26 @@ async fn imap_fetch_bodies(
 // ─── App ─────────────────────────────────────────────────────────────────────
 
 pub fn run() {
-    let migrations = vec![Migration {
-        version: 1,
-        description: "concierge initial schema",
-        sql: include_str!("../migrations/001_initial.sql"),
-        kind: MigrationKind::Up,
-    }];
+    let migrations = vec![
+        Migration {
+            version: 1,
+            description: "concierge initial schema",
+            sql: include_str!("../migrations/001_initial.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 2,
+            description: "person mentions + Sales/Health defaults",
+            sql: include_str!("../migrations/002_people.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 3,
+            description: "add Invoices / receipts default category",
+            sql: include_str!("../migrations/003_invoices.sql"),
+            kind: MigrationKind::Up,
+        },
+    ];
 
     tauri::Builder::default()
         .setup(|app| {
@@ -272,4 +286,37 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn seq_set_formats_uid_list() {
+        assert_eq!(seq_set(&[]), "");
+        assert_eq!(seq_set(&[1]), "1");
+        assert_eq!(seq_set(&[1, 4, 7]), "1,4,7");
+    }
+
+    #[test]
+    fn seq_set_handles_large_uids() {
+        assert_eq!(seq_set(&[4294967295]), "4294967295");
+    }
+
+    #[test]
+    fn meta_batch_serializes_total_and_messages() {
+        let batch = ImapMetaBatch {
+            total: 100,
+            messages: vec![ImapMeta {
+                uid: 42,
+                seen: false,
+                header: "Subject: hi\r\n".to_string(),
+            }],
+        };
+        let json = serde_json::to_string(&batch).unwrap();
+        assert!(json.contains("\"total\":100"));
+        assert!(json.contains("\"uid\":42"));
+        assert!(json.contains("\"seen\":false"));
+    }
 }

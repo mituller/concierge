@@ -10,9 +10,12 @@ interface Props {
   categoryId?: string;
   unreadOnly?: boolean;
   emptyText: string;
+  /** When this value changes, the first page reloads (e.g. the category's
+   *  live count) so newly-added messages appear while the view is open. */
+  refreshKey?: number;
 }
 
-export function EmailList({ categoryId, unreadOnly, emptyText }: Props) {
+export function EmailList({ categoryId, unreadOnly, emptyText, refreshKey }: Props) {
   const [emails, setEmails] = useState<Email[]>([]);
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
@@ -30,7 +33,7 @@ export function EmailList({ categoryId, unreadOnly, emptyText }: Props) {
         setLoading(false);
       }
     },
-    [categoryId, unreadOnly]
+    [categoryId, unreadOnly, refreshKey]
   );
 
   useEffect(() => {

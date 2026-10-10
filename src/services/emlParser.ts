@@ -20,9 +20,17 @@ function decodeBase64Utf8(b64: string): string {
 }
 
 function decodeQuotedPrintable(text: string): string {
-  return text
+  // =XX escapes are raw BYTES (often UTF-8), so collect them as byte values
+  // first, then decode as UTF-8 — otherwise é/C3=A9 becomes “Ã©” (Latin-1).
+  const byteString = text
     .replace(/=\r?\n/g, "")
     .replace(/=([0-9A-Fa-f]{2})/g, (_: string, h: string) => String.fromCharCode(parseInt(h, 16)));
+  try {
+    const bytes = Uint8Array.from(byteString, (c) => c.charCodeAt(0) & 0xff);
+    return new TextDecoder("utf-8").decode(bytes);
+  } catch {
+    return byteString;
+  }
 }
 
 // Decode RFC 2047 encoded words =?UTF-8?B?...?= or =?UTF-8?Q?...?=
