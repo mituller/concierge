@@ -4,18 +4,21 @@ import {
   classifySystemPrompt,
   classifyUserPrompt,
   matchPersonToCategory,
+  missingEmailIds,
   parseJson,
   peopleSystemPrompt,
   peopleUserPrompt,
+  resolveCategoryRoot,
   shouldExtractPeople,
 } from "./classify";
 
-const cat = (id: string, name: string, personEmail?: string): Category => ({
+const cat = (id: string, name: string, personEmail?: string, mergedInto?: string): Category => ({
   id,
   name,
   color: "#ccc",
   kind: personEmail !== undefined ? "person" : "topic",
   personEmail,
+  mergedInto,
   sortOrder: 0,
   builtin: false,
 });
@@ -86,6 +89,46 @@ describe("matchPersonToCategory", () => {
     const noEmail = [cat("p9", "Dr. Ezra")];
     const m = matchPersonToCategory({ name: "Dr. Ezra", email: "other@x.y" }, noEmail);
     expect(m?.id).toBe("p9");
+  });
+});
+
+describe("missingEmailIds", () => {
+  it("returns local ids no longer on the server", () => {
+    expect(missingEmailIds(["1", "2", "3"], [1, 3]).sort()).toEqual(["2"]);
+  });
+
+  it("returns nothing when all local ids still exist", () => {
+    expect(missingEmailIds(["10", "11"], [10, 11, 12])).toEqual([]);
+  });
+
+  it("returns everything when the mailbox is empty", () => {
+    expect(missingEmailIds(["5", "6"], []).sort()).toEqual(["5", "6"]);
+  });
+});
+
+describe("resolveCategoryRoot", () => {
+  it("returns the category itself when not merged", () => {
+    const cats = [cat("a", "A"), cat("b", "B")];
+    expect(resolveCategoryRoot("a", cats)).toBe("a");
+  });
+
+  it("follows a chain of merges to the root", () => {
+    const cats = [
+      cat("root", "Michael Tuller"),
+      cat("mid", "Michael", undefined, "root"),
+      cat("leaf", "Mike", undefined, "mid"),
+    ];
+    expect(resolveCategoryRoot("leaf", cats)).toBe("root");
+    expect(resolveCategoryRoot("mid", cats)).toBe("root");
+  });
+
+  it("returns the id unchanged when unknown", () => {
+    expect(resolveCategoryRoot("nope", [cat("a", "A")])).toBe("nope");
+  });
+
+  it("does not infinite-loop on a cycle", () => {
+    const cats = [cat("a", "A", undefined, "b"), cat("b", "B", undefined, "a")];
+    expect(() => resolveCategoryRoot("a", cats)).not.toThrow();
   });
 });
 

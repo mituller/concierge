@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Plus, Trash2, CheckCircle2, Loader2 } from "lucide-react";
+import { Plus, Trash2, CheckCircle2, Loader2, X } from "lucide-react";
 import { useSettingsStore } from "../../stores/settings";
 import { useCategoriesStore } from "../../stores/categories";
+import { useInboxStore } from "../../stores/inbox";
 import { Category, ClassifierEngine, Theme } from "../../types";
 import { hasImapConfig, imapConfigFromSettings, imapTest } from "../../services/imap";
 import { OpenRouterModelPicker } from "./OpenRouterModelPicker";
@@ -46,7 +47,7 @@ const THEMES: { id: Theme; label: string }[] = [
 
 export function Settings() {
   const { settings, update } = useSettingsStore();
-  const { categories, addTopic, addPerson, rename, recolor, remove: removeCategory } =
+  const { categories, addTopic, addPerson, merge, unmerge, rename, recolor, remove: removeCategory } =
     useCategoriesStore();
 
   const [testing, setTesting] = useState(false);
@@ -56,8 +57,20 @@ export function Settings() {
   const [newPersonName, setNewPersonName] = useState("");
   const [newPersonEmail, setNewPersonEmail] = useState("");
 
-  const topicCategories = categories.filter((c) => c.kind === "topic");
-  const personCategories = categories.filter((c) => c.kind === "person");
+  // Merged categories become aliases of their parent — show only roots.
+  const topicRoots = categories.filter((c) => c.kind === "topic" && !c.mergedInto);
+  const personRoots = categories.filter((c) => c.kind === "person" && !c.mergedInto);
+  const aliasesOf = (id: string) => categories.filter((c) => c.mergedInto === id);
+
+  async function handleMerge(childId: string, parentId: string) {
+    await merge(childId, parentId);
+    void useInboxStore.getState().refresh();
+  }
+
+  async function handleUnmerge(id: string) {
+    await unmerge(id);
+    void useInboxStore.getState().refresh();
+  }
 
   async function handleTest() {
     setTesting(true);
@@ -230,15 +243,23 @@ export function Settings() {
           and you can add more by hand.
         </p>
 
-        <div className="space-y-1.5">
-          {topicCategories.map((c) => (
-            <CategoryRow
-              key={c.id}
-              category={c}
-              onRename={(name) => void rename(c.id, name)}
-              onRecolor={(color) => void recolor(c.id, color)}
-              onRemove={() => void removeCategory(c.id)}
-            />
+        <div className="space-y-2">
+          {topicRoots.map((c) => (
+            <div key={c.id} className="space-y-1">
+              <CategoryRow
+                category={c}
+                onRename={(name) => void rename(c.id, name)}
+                onRecolor={(color) => void recolor(c.id, color)}
+                onRemove={() => void removeCategory(c.id)}
+              />
+              <MergeRow
+                category={c}
+                targets={topicRoots.filter((t) => t.id !== c.id)}
+                aliases={aliasesOf(c.id)}
+                onMerge={handleMerge}
+                onUnmerge={handleUnmerge}
+              />
+            </div>
           ))}
         </div>
 
@@ -298,24 +319,87 @@ export function Settings() {
           </button>
         </div>
 
-        {personCategories.length > 0 && (
-          <div className="space-y-1.5 pt-2">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400">
-              People
-            </p>
-            {personCategories.map((c) => (
-              <div
-                key={c.id}
-                className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 px-1"
-              >
-                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: c.color }} />
-                {c.name}
-                <span className="text-xs text-gray-400">{c.personEmail}</span>
+        {personRoots.length > 0 && (
+          <div className="space-y-2 pt-2">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400">People</p>
+            {personRoots.map((c) => (
+              <div key={c.id} className="space-y-1">
+                <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 px-1">
+                  <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: c.color }} />
+                  <span className="font-medium text-gray-800 dark:text-gray-100">{c.name}</span>
+                  {c.personEmail && <span className="text-xs text-gray-400">{c.personEmail}</span>}
+                  <button
+                    onClick={() => void removeCategory(c.id)}
+                    title="Delete person"
+                    className="ml-auto text-gray-400 hover:text-red-500"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+                <MergeRow
+                  category={c}
+                  targets={personRoots.filter((t) => t.id !== c.id)}
+                  aliases={aliasesOf(c.id)}
+                  onMerge={handleMerge}
+                  onUnmerge={handleUnmerge}
+                />
               </div>
             ))}
           </div>
         )}
       </Section>
+    </div>
+  );
+}
+
+function MergeRow({
+  category,
+  targets,
+  aliases,
+  onMerge,
+  onUnmerge,
+}: {
+  category: Category;
+  targets: Category[];
+  aliases: Category[];
+  onMerge: (childId: string, parentId: string) => void;
+  onUnmerge: (id: string) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-2 pl-2 text-xs">
+      {aliases.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1">
+          <span className="text-[10px] uppercase tracking-wide text-gray-400">also</span>
+          {aliases.map((a) => (
+            <span
+              key={a.id}
+              className="inline-flex items-center gap-1 rounded-full bg-gray-100 dark:bg-gray-700 px-2 py-0.5 text-gray-600 dark:text-gray-300"
+            >
+              {a.name}
+              <button onClick={() => onUnmerge(a.id)} title="Detach" className="hover:text-red-500">
+                <X size={11} />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      {targets.length > 0 && (
+        <select
+          value=""
+          onChange={(e) => {
+            if (e.target.value) onMerge(category.id, e.target.value);
+          }}
+          title="Combine this category into another"
+          className="rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-2 py-1 text-xs text-gray-600 dark:text-gray-300"
+        >
+          <option value="">Combine into…</option>
+          {targets.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
+            </option>
+          ))}
+        </select>
+      )}
     </div>
   );
 }

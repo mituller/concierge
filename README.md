@@ -109,7 +109,7 @@ it can never flag, move, or delete your messages.
 
 - **Topic categories** — multi-label buckets. Defaults: *Follow-up required,
   Potential spam, Billing, Sales, Health, Personal, Newsletters / promotions,
-  Invoices / receipts, Other*. Add, rename, recolor, or delete any of them.
+  Invoices / receipts, Security, Other*. Add, rename, recolor, or delete any of them.
 - **Person categories** — *who an email is about*, detected from content by AI.
   The **top 10 most-mentioned people** are auto-created (and backfilled) as
   classification runs; add more manually (name + optional email) at any time.

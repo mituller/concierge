@@ -41,6 +41,8 @@ export interface Category {
   color: string;
   kind: CategoryKind;
   personEmail?: string;   // sender email (person categories only)
+  /** If set, this category is an alias merged into the parent category id. */
+  mergedInto?: string;
   sortOrder: number;
   builtin: boolean;
 }
@@ -92,6 +94,7 @@ export const DEFAULT_TOPIC_CATEGORIES: TopicCategorySeed[] = [
   { name: "Personal", color: "#ec4899" },
   { name: "Newsletters / promotions", color: "#a855f7" },
   { name: "Invoices / receipts", color: "#10b981" },
+  { name: "Security", color: "#6366f1" },
   { name: "Other", color: "#6b7280" },
 ];
 

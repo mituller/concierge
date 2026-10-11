@@ -11,11 +11,13 @@ import {
   countEmails,
   countUncategorized,
   createCategory,
+  deleteEmails,
   emailExists,
   getPersonMentionCounts,
   getSyncState,
   getUncategorizedEmails,
   listCategories,
+  listEmailIds,
   persistClassificationBatch,
   saveSyncState,
   setEmailBody,
@@ -24,6 +26,7 @@ import {
 } from "./db";
 import {
   hasImapConfig,
+  imapAllUids,
   imapConfigFromSettings,
   imapFetchBodies,
   imapFetchMeta,
@@ -88,6 +91,27 @@ export async function syncMailbox(
     if (messages.length < META_BATCH) break;
   }
 
+  // Reflect deletions/archiving: drop local mail no longer in the mailbox.
+  if (!shouldCancel?.()) {
+    try {
+      const serverUids = await imapAllUids(cfg);
+      if (serverUids.length > 0) {
+        const gone = missingEmailIds(await listEmailIds(accountId), serverUids);
+        if (gone.length > 0) {
+          onProgress?.({
+            label: `Removing ${gone.length.toLocaleString()} message(s) no longer in Gmail…`,
+            done: 0,
+            total: 0,
+          });
+          await deleteEmails(gone);
+        }
+      }
+    } catch (err) {
+      // Best-effort: never fail a sync because reconciliation hiccuped.
+      console.warn("deletion reconcile failed:", err);
+    }
+  }
+
   await saveSyncState(accountId, {
     lastSyncAt: new Date().toISOString(),
     nextPageToken: String(lastUid),
@@ -149,6 +173,24 @@ async function extractPeopleWithAI(
     console.warn("people extraction failed:", err);
     return [];
   }
+}
+
+/** Local email ids no longer present in the mailbox (deleted/archived upstream). */
+export function missingEmailIds(localIds: string[], serverUids: number[]): string[] {
+  const server = new Set(serverUids.map(String));
+  return localIds.filter((id) => !server.has(id));
+}
+
+/** Follow merged_into pointers up to the root category id (cycle-safe). */
+export function resolveCategoryRoot(id: string, categories: Category[]): string {
+  const byId = new Map(categories.map((c) => [c.id, c]));
+  let cur = byId.get(id);
+  const seen = new Set<string>();
+  while (cur?.mergedInto && !seen.has(cur.id)) {
+    seen.add(cur.id);
+    cur = byId.get(cur.mergedInto);
+  }
+  return cur?.id ?? id;
 }
 
 /** Match an extracted person to an existing person category (email first, then name). */
@@ -390,7 +432,8 @@ export async function classifyUncategorized(params: {
       settings.classifier === "jev" ? "~typesafe/jev-latest" : settings.openRouterModel;
 
     // Person categories may grow between batches as bootstrapPeople runs.
-    const personCats = (await listCategories()).filter((c) => c.kind === "person");
+    const allCats = await listCategories();
+    const personCats = allCats.filter((c) => c.kind === "person");
 
     // Fetch bodies for the whole batch in ONE IMAP connection (the old code
     // opened a connection per email — the main reason classification felt slow).
@@ -430,9 +473,16 @@ export async function classifyUncategorized(params: {
           personCats,
           shouldExtractPeople(email, body, personCats)
         );
+        const resolved: { categoryId: string; confidence: number }[] = [];
+        for (const a of assignments) {
+          const id = resolveCategoryRoot(a.categoryId, allCats);
+          if (!resolved.some((x) => x.categoryId === id)) {
+            resolved.push({ categoryId: id, confidence: a.confidence });
+          }
+        }
         const finalAssignments =
-          assignments.length > 0
-            ? assignments
+          resolved.length > 0
+            ? resolved
             : fallback
               ? [{ categoryId: fallback, confidence: 0.3 }]
               : [];

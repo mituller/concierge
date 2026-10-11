@@ -143,6 +143,23 @@ fn imap_fetch_bodies_impl(
     Ok(out)
 }
 
+/// Every UID currently in the folder — used to detect messages deleted in Gmail.
+fn imap_all_uids_impl(
+    host: &str,
+    port: u16,
+    email: &str,
+    password: &str,
+    folder: &str,
+) -> Result<Vec<u32>, String> {
+    let mut session = imap_session(host, port, email, password)?;
+    examine(&mut session, folder)?;
+    let uids = session.uid_search("ALL").map_err(|e| e.to_string())?;
+    let _ = session.logout();
+    let mut v: Vec<u32> = uids.into_iter().collect();
+    v.sort_unstable();
+    Ok(v)
+}
+
 #[tauri::command]
 async fn imap_test(host: String, port: u16, email: String, password: String, folder: String) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || imap_test_impl(&host, port, &email, &password, &folder))
@@ -183,6 +200,21 @@ async fn imap_fetch_bodies(
     .map_err(|e| format!("IMAP task failed: {e}"))?
 }
 
+#[tauri::command]
+async fn imap_all_uids(
+    host: String,
+    port: u16,
+    email: String,
+    password: String,
+    folder: String,
+) -> Result<Vec<u32>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        imap_all_uids_impl(&host, port, &email, &password, &folder)
+    })
+    .await
+    .map_err(|e| format!("IMAP task failed: {e}"))?
+}
+
 // ─── App ─────────────────────────────────────────────────────────────────────
 
 pub fn run() {
@@ -203,6 +235,18 @@ pub fn run() {
             version: 3,
             description: "add Invoices / receipts default category",
             sql: include_str!("../migrations/003_invoices.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 4,
+            description: "category merging (merged_into pointer)",
+            sql: include_str!("../migrations/004_merge.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 5,
+            description: "add Security default category",
+            sql: include_str!("../migrations/005_security.sql"),
             kind: MigrationKind::Up,
         },
     ];
@@ -282,7 +326,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             imap_test,
             imap_fetch_meta,
-            imap_fetch_bodies
+            imap_fetch_bodies,
+            imap_all_uids
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -11,8 +11,10 @@ export function Dashboard({ onOpenCategory }: { onOpenCategory: (id: string) => 
   const trend = useInboxStore((s) => s.trend);
   const lastError = useInboxStore((s) => s.lastError);
   const categories = useCategoriesStore((s) => s.categories);
+  // Merged aliases are folded into their parent — show only root categories.
+  const roots = categories.filter((c) => !c.mergedInto);
 
-  const barData = categories.map((c) => ({
+  const barData = roots.map((c) => ({
     name: c.name,
     color: c.color,
     count: counts[c.id] ?? 0,
@@ -42,13 +44,13 @@ export function Dashboard({ onOpenCategory }: { onOpenCategory: (id: string) => 
         <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-200 uppercase tracking-wide">
           Categories
         </h2>
-        {categories.length === 0 ? (
+        {roots.length === 0 ? (
           <p className="text-sm text-gray-400 dark:text-gray-500 py-8 text-center">
             No categories yet — run a sync to classify your inbox.
           </p>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-            {categories.map((c) => (
+            {roots.map((c) => (
               <CategoryCard
                 key={c.id}
                 category={c}

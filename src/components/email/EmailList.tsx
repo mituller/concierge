@@ -9,13 +9,14 @@ const PAGE = 50;
 interface Props {
   categoryId?: string;
   unreadOnly?: boolean;
+  search?: string;
   emptyText: string;
   /** When this value changes, the first page reloads (e.g. the category's
    *  live count) so newly-added messages appear while the view is open. */
   refreshKey?: number;
 }
 
-export function EmailList({ categoryId, unreadOnly, emptyText, refreshKey }: Props) {
+export function EmailList({ categoryId, unreadOnly, search, emptyText, refreshKey }: Props) {
   const [emails, setEmails] = useState<Email[]>([]);
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
@@ -25,7 +26,7 @@ export function EmailList({ categoryId, unreadOnly, emptyText, refreshKey }: Pro
     async (off: number, replace: boolean) => {
       setLoading(true);
       try {
-        const rows = await queryEmailPage({ categoryId, unreadOnly, offset: off, limit: PAGE });
+        const rows = await queryEmailPage({ categoryId, unreadOnly, search, offset: off, limit: PAGE });
         setEmails((prev) => (replace ? rows : [...prev, ...rows]));
         setOffset(off + rows.length);
         setHasMore(rows.length === PAGE);
@@ -33,7 +34,7 @@ export function EmailList({ categoryId, unreadOnly, emptyText, refreshKey }: Pro
         setLoading(false);
       }
     },
-    [categoryId, unreadOnly, refreshKey]
+    [categoryId, unreadOnly, search, refreshKey]
   );
 
   useEffect(() => {

@@ -63,6 +63,11 @@ export async function imapFetchBodies(cfg: ImapConfig, uids: number[]): Promise<
   return invoke<ImapRaw[]>("imap_fetch_bodies", { ...cfg, uids });
 }
 
+/** All UIDs currently in the mailbox — used to detect messages deleted upstream. */
+export async function imapAllUids(cfg: ImapConfig): Promise<number[]> {
+  return invoke<number[]>("imap_all_uids", { ...cfg });
+}
+
 // ─── Parsing ────────────────────────────────────────────────────────────────
 
 function splitFrom(from: string): { name: string; email: string } {

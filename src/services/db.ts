@@ -47,6 +47,7 @@ function rowToCategory(row: Record<string, unknown>): Category {
     color: row.color as string,
     kind: row.kind as Category["kind"],
     personEmail: (row.person_email as string) || undefined,
+    mergedInto: (row.merged_into as string) || undefined,
     sortOrder: Number(row.sort_order ?? 0),
     builtin: !!row.builtin,
   };
@@ -197,8 +198,39 @@ export async function updateCategory(
 
 export async function deleteCategory(id: string): Promise<void> {
   const d = await getDb();
+  // Re-parent any aliases that point at this category to its own parent.
+  await d.execute(
+    `UPDATE categories SET merged_into = (SELECT merged_into FROM categories WHERE id = $1)
+     WHERE merged_into = $1`,
+    [id]
+  );
   await d.execute("DELETE FROM email_categories WHERE category_id = $1", [id]);
   await d.execute("DELETE FROM categories WHERE id = $1", [id]);
+}
+
+/** Merge `childId` into `parentId`: alias pointer + move existing mail. Future
+ *  matches for the child resolve to the parent (see resolveCategoryRoot). */
+export async function mergeCategory(childId: string, parentId: string): Promise<void> {
+  if (childId === parentId) return;
+  const d = await getDb();
+  await d.execute(
+    `INSERT OR IGNORE INTO email_categories (email_id, category_id, confidence)
+     SELECT email_id, $1, confidence FROM email_categories WHERE category_id = $2`,
+    [parentId, childId]
+  );
+  await d.execute("DELETE FROM email_categories WHERE category_id = $1", [childId]);
+  // Flatten aliases that pointed at the child, then point the child at the parent.
+  await d.execute("UPDATE categories SET merged_into = $1 WHERE merged_into = $2", [
+    parentId,
+    childId,
+  ]);
+  await d.execute("UPDATE categories SET merged_into = $1 WHERE id = $2", [parentId, childId]);
+}
+
+/** Detach an alias (its history stays on the parent). */
+export async function unmergeCategory(id: string): Promise<void> {
+  const d = await getDb();
+  await d.execute("UPDATE categories SET merged_into = NULL WHERE id = $1", [id]);
 }
 
 // ─── Emails ─────────────────────────────────────────────────────────────────
@@ -232,6 +264,31 @@ export async function emailExists(id: string): Promise<boolean> {
   return (rows[0]?.n ?? 0) > 0;
 }
 
+/** All local email ids (IMAP UIDs as strings) for an account. */
+export async function listEmailIds(accountId: string): Promise<string[]> {
+  const d = await getDb();
+  const rows = await d.select<{ id: string }[]>(
+    "SELECT id FROM emails WHERE account_id = $1",
+    [accountId]
+  );
+  return rows.map((r) => r.id);
+}
+
+/** Remove emails (and their category assignments + people mentions) that no
+ *  longer exist in the mailbox. Chunked to stay under SQLite's param limit. */
+export async function deleteEmails(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const d = await getDb();
+  const CHUNK = 400;
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const chunk = ids.slice(i, i + CHUNK);
+    const ph = chunk.map((_, j) => `$${j + 1}`).join(",");
+    await d.execute(`DELETE FROM email_categories WHERE email_id IN (${ph})`, chunk);
+    await d.execute(`DELETE FROM person_mentions WHERE email_id IN (${ph})`, chunk);
+    await d.execute(`DELETE FROM emails WHERE id IN (${ph})`, chunk);
+  }
+}
+
 async function attachCategories(emails: Email[]): Promise<void> {
   if (emails.length === 0) return;
   const d = await getDb();
@@ -263,6 +320,7 @@ async function attachCategories(emails: Email[]): Promise<void> {
 export async function queryEmailPage(params: {
   categoryId?: string;
   unreadOnly?: boolean;
+  search?: string;
   offset: number;
   limit: number;
 }): Promise<Email[]> {
@@ -280,6 +338,14 @@ export async function queryEmailPage(params: {
   if (params.unreadOnly) {
     clauses.push(`e.unread = 1`);
   }
+  if (params.search && params.search.trim()) {
+    const p = `$${i++}`;
+    clauses.push(`(${likeClause("e.subject", p)} OR ${likeClause("e.from_name", p)} OR ${likeClause(
+      "e.from_email",
+      p
+    )} OR ${likeClause("e.snippet", p)} OR ${likeClause("e.body_text", p)})`);
+    values.push(likeValue(params.search));
+  }
   if (clauses.length) sql += " WHERE " + clauses.join(" AND ");
   sql += " ORDER BY e.date DESC";
   sql += ` LIMIT $${i++} OFFSET $${i++}`;
@@ -289,6 +355,31 @@ export async function queryEmailPage(params: {
   const emails = rows.map(rowToEmail);
   await attachCategories(emails);
   return emails;
+}
+
+/** Escape LIKE wildcards and wrap in %…% for a contains search. */
+export function likeValue(search: string): string {
+  return `%${search.trim().replace(/[\\%_]/g, (m) => "\\" + m)}%`;
+}
+
+function likeClause(col: string, param: string): string {
+  return `${col} LIKE ${param} ESCAPE '\\'`;
+}
+
+export async function countEmailMatches(search: string): Promise<number> {
+  if (!search.trim()) return 0;
+  const d = await getDb();
+  const rows = await d.select<{ n: number }[]>(
+    `SELECT COUNT(*) AS n FROM emails e WHERE (${likeClause("e.subject", "$1")} OR ${likeClause(
+      "e.from_name",
+      "$1"
+    )} OR ${likeClause("e.from_email", "$1")} OR ${likeClause("e.snippet", "$1")} OR ${likeClause(
+      "e.body_text",
+      "$1"
+    )})`,
+    [likeValue(search)]
+  );
+  return Number(rows[0]?.n ?? 0);
 }
 
 export async function getEmail(id: string): Promise<Email | null> {

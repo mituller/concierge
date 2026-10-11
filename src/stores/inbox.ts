@@ -53,7 +53,10 @@ export const useInboxStore = create<InboxStore>((set, get) => ({
     set({
       stats,
       counts: countMap,
-      trend: buildTrendSeries(rawTrend, categories),
+      trend: buildTrendSeries(
+        rawTrend,
+        categories.filter((c) => !c.mergedInto)
+      ),
     });
   },
 
