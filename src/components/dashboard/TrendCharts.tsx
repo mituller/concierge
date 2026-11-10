@@ -139,7 +139,7 @@ export function CategoryTrendChart({ series }: { series: TrendSeries[] }) {
             <button
               key={s.categoryId}
               onClick={() => toggle(s.categoryId)}
-              className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-xs transition-colors ${
+              className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ${
                 off ? "opacity-40" : "opacity-100"
               }`}
             >
