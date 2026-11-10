@@ -13,7 +13,7 @@ export function InboxView() {
         </p>
       </div>
 
-      <EmailList emptyText="No messages yet — run a sync to pull in your inbox." />
+      <EmailList filterable emptyText="No messages yet — run a sync to pull in your inbox." />
     </div>
   );
 }

@@ -540,6 +540,7 @@ async function ensureEmailBody(email: Email, settings: AppSettings): Promise<str
 
   const body = rawToBody(raw);
   await setEmailBody(email.id, body);
+  email.bodyText = body; // cache on the object so a later summary doesn't refetch
   return body;
 }
 

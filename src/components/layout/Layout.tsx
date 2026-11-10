@@ -56,14 +56,24 @@ export function Layout() {
     };
   }, [syncNow]);
 
-  // ⌘K / Ctrl-K focuses the search box; Escape clears it.
+  // ⌘K / Ctrl-K focuses the search box. Escape clears the search only when
+  // the search box has focus, or when focus isn't in some other text field
+  // (so Escape inside a Settings input doesn't wipe an active search).
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         document.getElementById("global-search")?.focus();
       } else if (e.key === "Escape") {
+        const el = document.activeElement as HTMLElement | null;
+        const inSearch = el?.id === "global-search";
+        const inOtherField =
+          !inSearch &&
+          !!el &&
+          (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName));
+        if (inOtherField) return;
         setSearch("");
+        if (inSearch) el?.blur();
       }
     }
     window.addEventListener("keydown", onKey);
@@ -76,10 +86,15 @@ export function Layout() {
     <div className="flex h-screen overflow-hidden bg-gray-50 dark:bg-gray-900">
       <Sidebar
         current={view}
+        categoryId={categoryId}
         onChange={(v) => {
           setCategoryId(null);
           setSearch("");
           setView(v);
+        }}
+        onOpenCategory={(id) => {
+          setSearch("");
+          setCategoryId(id);
         }}
       />
 
@@ -127,7 +142,7 @@ export function Layout() {
               />
             </div>
           ) : categoryId ? (
-            <CategoryDetail categoryId={categoryId} onBack={() => setCategoryId(null)} />
+            <CategoryDetail categoryId={categoryId} />
           ) : (
             <>
               {view === "dashboard" && <Dashboard onOpenCategory={setCategoryId} />}

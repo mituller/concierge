@@ -3,10 +3,34 @@ import { Category } from "../../types";
 interface Props {
   category: Category;
   count: number;
+  /** Messages in the last 7 days. */
+  recent: number;
+  /** Monthly counts, oldest → newest (last 12 months). */
+  trend?: number[];
   onClick: () => void;
 }
 
-export function CategoryCard({ category, count, onClick }: Props) {
+function Sparkline({ values, color }: { values: number[]; color: string }) {
+  const w = 72;
+  const h = 24;
+  const max = Math.max(1, ...values);
+  const step = values.length > 1 ? w / (values.length - 1) : w;
+  const pts = values.map((v, i) => `${(i * step).toFixed(1)},${(h - 2 - (v / max) * (h - 4)).toFixed(1)}`);
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="shrink-0" aria-hidden>
+      <polyline
+        points={pts.join(" ")}
+        fill="none"
+        stroke={color}
+        strokeWidth={1.5}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+export function CategoryCard({ category, count, recent, trend, onClick }: Props) {
   return (
     <button
       onClick={onClick}
@@ -26,7 +50,21 @@ export function CategoryCard({ category, count, onClick }: Props) {
           </span>
         )}
       </div>
-      <p className="text-3xl font-bold text-gray-900 dark:text-white mt-2">{count.toLocaleString()}</p>
+      <div className="flex items-end justify-between gap-2 mt-2">
+        <div className="min-w-0">
+          <p className="text-3xl font-bold text-gray-900 dark:text-white leading-none">
+            {count.toLocaleString()}
+          </p>
+          <p
+            className={`text-xs mt-1.5 ${
+              recent > 0 ? "font-medium text-emerald-600 dark:text-emerald-400" : "text-gray-400 dark:text-gray-500"
+            }`}
+          >
+            {recent > 0 ? `+${recent.toLocaleString()} this week` : "Nothing new this week"}
+          </p>
+        </div>
+        {trend && trend.some((v) => v > 0) && <Sparkline values={trend} color={category.color} />}
+      </div>
     </button>
   );
 }

@@ -1,4 +1,3 @@
-import { AlertTriangle } from "lucide-react";
 import { useInboxStore } from "../../stores/inbox";
 import { useCategoriesStore } from "../../stores/categories";
 import { StatsBar } from "./StatsBar";
@@ -9,7 +8,7 @@ export function Dashboard({ onOpenCategory }: { onOpenCategory: (id: string) => 
   const stats = useInboxStore((s) => s.stats);
   const counts = useInboxStore((s) => s.counts);
   const trend = useInboxStore((s) => s.trend);
-  const lastError = useInboxStore((s) => s.lastError);
+  const recentCounts = useInboxStore((s) => s.recentCounts);
   const categories = useCategoriesStore((s) => s.categories);
   // Merged aliases are folded into their parent — show only root categories.
   const roots = categories.filter((c) => !c.mergedInto);
@@ -31,13 +30,6 @@ export function Dashboard({ onOpenCategory }: { onOpenCategory: (id: string) => 
         </div>
       </div>
 
-      {lastError && (
-        <div className="flex items-start gap-2 rounded-lg border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/40 px-4 py-3 text-sm text-red-700 dark:text-red-300">
-          <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-          <span>{lastError}</span>
-        </div>
-      )}
-
       <StatsBar stats={stats} />
 
       <section className="space-y-3">
@@ -55,6 +47,8 @@ export function Dashboard({ onOpenCategory }: { onOpenCategory: (id: string) => 
                 key={c.id}
                 category={c}
                 count={counts[c.id] ?? 0}
+                recent={recentCounts[c.id] ?? 0}
+                trend={trend.find((t) => t.categoryId === c.id)?.points.map((p) => p.count)}
                 onClick={() => onOpenCategory(c.id)}
               />
             ))}

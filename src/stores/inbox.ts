@@ -3,6 +3,7 @@ import { DashboardStats, SyncProgress, TrendSeries } from "../types";
 import {
   buildTrendSeries,
   countByCategory,
+  countRecentByCategory,
   getDashboardStats,
   getTrendByMonth,
   listCategories,
@@ -14,6 +15,8 @@ import { useCategoriesStore } from "./categories";
 interface InboxStore {
   stats: DashboardStats;
   counts: Record<string, number>;
+  /** Messages per category from the last 7 days. */
+  recentCounts: Record<string, number>;
   trend: TrendSeries[];
   syncing: boolean;
   progress: SyncProgress | null;
@@ -24,11 +27,13 @@ interface InboxStore {
   refresh: () => Promise<void>;
   syncNow: () => Promise<void>;
   cancel: () => void;
+  dismissError: () => void;
 }
 
 export const useInboxStore = create<InboxStore>((set, get) => ({
   stats: { total: 0, unread: 0, categorized: 0 },
   counts: {},
+  recentCounts: {},
   trend: [],
   syncing: false,
   progress: null,
@@ -42,17 +47,22 @@ export const useInboxStore = create<InboxStore>((set, get) => ({
   },
 
   refresh: async () => {
-    const [stats, counts, categories, rawTrend] = await Promise.all([
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const [stats, counts, recent, categories, rawTrend] = await Promise.all([
       getDashboardStats(),
       countByCategory(),
+      countRecentByCategory(weekAgo),
       listCategories(),
       getTrendByMonth(),
     ]);
     const countMap: Record<string, number> = {};
     for (const c of counts) countMap[c.categoryId] = c.count;
+    const recentMap: Record<string, number> = {};
+    for (const c of recent) recentMap[c.categoryId] = c.count;
     set({
       stats,
       counts: countMap,
+      recentCounts: recentMap,
       trend: buildTrendSeries(
         rawTrend,
         categories.filter((c) => !c.mergedInto)
@@ -61,6 +71,8 @@ export const useInboxStore = create<InboxStore>((set, get) => ({
   },
 
   cancel: () => set({ cancelRequested: true }),
+
+  dismissError: () => set({ lastError: null }),
 
   syncNow: async () => {
     if (get().syncing) return;

@@ -649,6 +649,25 @@ export async function countByCategory(): Promise<{ categoryId: string; count: nu
   }));
 }
 
+/** Messages per category dated on/after `sinceIso` (e.g. the last 7 days). */
+export async function countRecentByCategory(
+  sinceIso: string
+): Promise<{ categoryId: string; count: number }[]> {
+  const d = await getDb();
+  const rows = await d.select<Record<string, unknown>[]>(
+    `SELECT ec.category_id AS category_id, COUNT(*) AS count
+     FROM email_categories ec
+     JOIN emails e ON e.id = ec.email_id
+     WHERE e.date >= $1
+     GROUP BY ec.category_id`,
+    [sinceIso]
+  );
+  return rows.map((r) => ({
+    categoryId: r.category_id as string,
+    count: Number(r.count ?? 0),
+  }));
+}
+
 export async function getTrendByMonth(): Promise<
   { categoryId: string; month: string; count: number }[]
 > {
