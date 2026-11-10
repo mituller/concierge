@@ -1,35 +1,50 @@
 # Concierge
 
-**The mail concierge for a crowded inbox.** A native macOS desktop app that syncs
-your Gmail over IMAP (read-only), classifies every message into categories with AI,
-and shows a live dashboard of counts + trends so you can work through the backlog.
+**The mail concierge for a crowded inbox.**
 
-<img src="public/icon.svg" alt="Concierge" width="128" height="128" />
+<img src="public/icon.svg" alt="Concierge" width="96" height="96" align="right" />
+
+Concierge is a macOS app for anyone with a Gmail inbox that has gotten out of hand.
+It reads your mail, uses AI to sort every message into categories — *Follow-up
+required*, *Billing*, *Potential spam*, *Newsletters*, the people your mail is about,
+and more — and gives you a dashboard of what's there and what's new, so you can
+work through the backlog instead of scrolling through it.
+
+It is **strictly read-only**: Concierge never deletes, moves, archives, labels, or
+marks anything as read in Gmail. Your mail is stored only on your Mac.
+
+![Concierge dashboard: stats, category cards with weekly counts and trend lines](docs/screenshots/dashboard.png)
+
+![Messages per category bar chart and 12-month volume trend](docs/screenshots/dashboard-charts.png)
+
+<sub>Names of people in the screenshots have been replaced with Person A–F.</sub>
 
 ---
 
 ## What it does
 
-- **Gmail sync (IMAP, read-only)** — metadata-first sync with a resumable UID
-  cursor and incremental refreshes. Uses `EXAMINE` + `BODY.PEEK`, so nothing is
-  ever flagged, moved, or deleted.
-- **Live progress + cancel/resume** — the sidebar shows real `N / M` counts for
-  syncing *and* classifying, with a **Cancel** button. Everything resumes where it
-  left off (UID cursor + `classified` flag), even across app restarts.
-- **AI classification (multi-label)** — every email is sorted into topic
-  categories — **Jev** (fast typed yes/no, the default) or **DeepSeek Flash**
-  (chat + JSON). One email can be in several categories at once.
-- **People categories = who the email is *about*** — AI extracts the people
-  central to each email's *content* (not just the sender). The **top 10** people
-  become person-categories automatically; add more manually. Example: a doctor's
-  appointment email lands in **Health** *and* a person category for the doctor.
-- **Live dashboard** — category cards tick up as emails are categorized; a bar
-  chart + 12-month multi-line trend chart update as you watch. Category views
-  refresh themselves while open.
-- **Drill-down & summaries** — click any card to see its messages; expand one and
-  get an on-demand **DeepSeek summary** ("what this is" + "why it needs follow-up").
-
-v1 is **read-only** — no delete, no archive, no label write-back to Gmail.
+- **Sorts your inbox for you** — every message is classified into one or more
+  topic categories (*Follow-up required, Potential spam, Billing, Sales, Health,
+  Personal, Newsletters / promotions, Invoices / receipts, Security, Other*). Add,
+  rename, recolor, merge, or delete categories to fit how you think.
+- **Groups mail by the people it's about** — AI finds who each email is *about*
+  (not just who sent it). The 10 most-mentioned people get their own categories
+  automatically; add more yourself.
+- **Shows what's new** — each category card shows its total, how many arrived
+  this week, and a 12-month trend line. Charts show volume per category and
+  month by month.
+- **Summarizes on demand** — expand any message and click **Summarize** for a
+  two-sentence summary: what it is and whether it needs follow-up.
+- **Finds anything fast** — search across sender, subject, and message text
+  (⌘K), with matches highlighted.
+- **Lets you correct it** — remove a message from a category with **×**, or add
+  it to another with **+**.
+- **Never touches your Gmail** — connects over IMAP in read-only mode
+  (`EXAMINE` + `BODY.PEEK`), so nothing is ever flagged, moved, marked read, or
+  deleted. Messages you delete in Gmail disappear from Concierge on the next sync.
+- **Syncs incrementally** — the first sync pulls in your whole inbox with live
+  progress and a **Cancel** button; later syncs fetch only new mail. Everything
+  resumes where it left off, even after quitting.
 
 ---
 
@@ -62,8 +77,11 @@ v1 is **read-only** — no delete, no archive, no label write-back to Gmail.
 
 ### Install
 
+There's no prebuilt download yet, so you build it from source:
+
 ```bash
-cd Concierge
+git clone https://github.com/mituller/concierge.git
+cd concierge
 pnpm install
 source ~/.cargo/env && pnpm tauri dev
 ```
@@ -119,13 +137,34 @@ it can never flag, move, or delete your messages.
 
 ## Usage
 
-- **Sync now** (sidebar, or ⌘R) — syncs new mail, then classifies the backlog with
-  live `N / M` progress. **Cancel** stops at the next batch; **Sync now** resumes.
-- **Dashboard** — stat cards, category cards (updating live), bar chart, 12-month
-  trend chart. Click a card to drill down.
-- **Category view** — refreshes automatically while open; expand any message for
-  the full body or a **DeepSeek summary**.
-- **Inbox** — the full synced mailbox, newest first.
+- **Sync now** (sidebar button, or ⌘R) — fetches new mail, then classifies it
+  with live progress. **Cancel** stops after the current batch; **Sync now**
+  picks up where it left off. If a sync fails, the error appears in the sidebar.
+- **Dashboard** — totals, unread count, last sync time, a card per category
+  (with *+N this week* and a trend line), and the charts. Click a card to open
+  that category.
+- **Sidebar categories** — every category with its message count, one click
+  away from any page.
+- **Inbox** — your whole synced mailbox, newest first. Unread messages are bold
+  with a blue dot; use **All / Unread** to filter. The list loads more as you
+  scroll.
+- **Reading a message** — click a row to expand it. The text loads
+  automatically, links open in your browser, and quoted replies are collapsed
+  (click *··· N quoted lines* to show them). Click **Summarize** for an AI summary.
+- **Search** — ⌘K, then type. Esc clears it.
+
+### Keyboard shortcuts
+
+| Key | Action |
+|---|---|
+| ⌘K | Search mail |
+| Esc | Clear search |
+| j / ↓ | Next message |
+| k / ↑ | Previous message |
+| Enter / o | Expand or collapse the selected message |
+| s | Summarize the selected message |
+| ⌘R | Sync now |
+| ⌘, | Settings |
 
 ---
 
